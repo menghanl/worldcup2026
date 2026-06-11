@@ -337,6 +337,9 @@
   <button data-mode="60">Every 1 min<span class="chk">✓</span></button>
   <button data-mode="300">Every 5 min<span class="chk">✓</span></button>
   <button data-mode="off">Off<span class="chk">✓</span></button>
+  <div class="mhead">Team names · 语言</div>
+  <button data-lang="en">English<span class="chk">✓</span></button>
+  <button data-lang="zh">中文<span class="chk">✓</span></button>
 </div>
 
 <script>
@@ -391,6 +394,44 @@ let refreshMode = (() => {
   try { const m = localStorage.getItem('wc26-refresh'); return MODES.includes(m) ? m : 'smart'; }
   catch { return 'smart'; }
 })();
+
+// ---- nation name translation (browser CLDR via Intl.DisplayNames) ----
+let lang = (() => {
+  try { return localStorage.getItem('wc26-lang') === 'zh' ? 'zh' : 'en'; }
+  catch { return 'en'; }
+})();
+// FIFA trigram -> ISO 3166-1 alpha-2 (the 48 qualified teams)
+const FIFA_TO_ISO = {
+  ALG: 'DZ', ARG: 'AR', AUS: 'AU', AUT: 'AT', BEL: 'BE', BRA: 'BR', CAN: 'CA',
+  CIV: 'CI', COD: 'CD', COL: 'CO', CPV: 'CV', CRO: 'HR', CUW: 'CW', CZE: 'CZ',
+  ECU: 'EC', EGY: 'EG', ESP: 'ES', FRA: 'FR', GER: 'DE', GHA: 'GH', HAI: 'HT',
+  IRN: 'IR', IRQ: 'IQ', JOR: 'JO', JPN: 'JP', KOR: 'KR', KSA: 'SA', MAR: 'MA',
+  MEX: 'MX', NED: 'NL', NOR: 'NO', NZL: 'NZ', PAN: 'PA', PAR: 'PY', POR: 'PT',
+  QAT: 'QA', RSA: 'ZA', SEN: 'SN', SUI: 'CH', SWE: 'SE', TUN: 'TN', TUR: 'TR',
+  URU: 'UY', USA: 'US', UZB: 'UZ',
+};
+// football nations without ISO codes + short forms where CLDR is too long
+const ZH_OVERRIDE = { ENG: '英格兰', SCO: '苏格兰', BIH: '波黑' };
+let zhNames = null;
+function teamName(t) {
+  if (lang !== 'zh' || t.tbd || !t.abbr) return t.name;
+  if (ZH_OVERRIDE[t.abbr]) return ZH_OVERRIDE[t.abbr];
+  const iso = FIFA_TO_ISO[t.abbr];
+  if (!iso) return t.name;
+  try {
+    zhNames ||= new Intl.DisplayNames(['zh-Hans'], { type: 'region' });
+    return zhNames.of(iso) || t.name;
+  } catch { return t.name; }
+}
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem('wc26-lang', l); } catch {}
+  document.querySelectorAll('#autoMenu button[data-lang]').forEach(b =>
+    b.classList.toggle('sel', b.dataset.lang === l));
+  toggleMenu(false);
+  render();
+  renderGroups();
+}
 
 /* ---------------- data ---------------- */
 
@@ -512,8 +553,8 @@ function announceGoals(changed) {
     if (hero) { hero.classList.remove('flash'); void hero.offsetWidth; hero.classList.add('flash'); }
   }
   const lines = changed.map(e =>
-    '⚽ ' + liveClock(e) + ' ' + e.home.name + ' ' + (e.home.score ?? '') +
-    '–' + (e.away.score ?? '') + ' ' + e.away.name);
+    '⚽ ' + liveClock(e) + ' ' + teamName(e.home) + ' ' + (e.home.score ?? '') +
+    '–' + (e.away.score ?? '') + ' ' + teamName(e.away));
   const toast = $('goalToast');
   toast.innerHTML = lines.map(esc).join('<br>');
   toast.classList.add('show');
@@ -542,6 +583,7 @@ async function fetchStandings() {
         entries.push({
           id: String(t.id || ''),
           name: t.shortDisplayName || t.displayName || '',
+          abbr: t.abbreviation || '',
           logo: ((t.logos || [])[0] || {}).href || '',
           gp: stat('gamesPlayed'),
           record: stat('overall'),
@@ -702,9 +744,9 @@ function heroCard(e, kind) {
   return '<div class="hero-card ' + (isLive ? 'live' : 'next') + '" data-goto="' + esc(e.id) + '">' +
     '<div class="hero-tag">' + tag + '</div>' +
     '<div class="hero-row">' +
-      '<div class="hero-team">' + logoImg(e.home) + '<span class="tname">' + esc(e.home.name) + '</span></div>' +
+      '<div class="hero-team">' + logoImg(e.home) + '<span class="tname">' + esc(teamName(e.home)) + '</span></div>' +
       '<div class="hero-mid">' + mid + '</div>' +
-      '<div class="hero-team">' + logoImg(e.away) + '<span class="tname">' + esc(e.away.name) + '</span></div>' +
+      '<div class="hero-team">' + logoImg(e.away) + '<span class="tname">' + esc(teamName(e.away)) + '</span></div>' +
     '</div>' + sub +
     '<div class="hero-meta">' + esc(meta) + '</div>' +
   '</div>';
@@ -750,7 +792,7 @@ function gameRow(e) {
     const lost = e.state === 'post' && !t.winner && (opp.winner || Number(t.score) < Number(opp.score));
     const sc = scorersFor(e, t);
     return '<div class="trow' + (lost ? ' loser' : '') + '">' + logoImg(t) +
-      '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + esc(t.name) + '</span>' +
+      '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + esc(teamName(t)) + '</span>' +
       (showScore ? '<span class="sc">' + scoreStr(t) + '</span>' : '') +
     '</div>' +
     (sc ? '<div class="scorers">' + esc(sc) + '</div>' : '');
@@ -799,7 +841,7 @@ function renderGroups() {
       return '<div class="grow' + q + '">' +
         '<span class="rk">' + t.rank + '</span>' +
         '<img src="' + esc(t.logo || window.CREST_URI) + '" alt="" loading="lazy" onerror="this.onerror=null;this.src=window.CREST_URI">' +
-        '<span class="gnm">' + esc(t.name) + '</span>' +
+        '<span class="gnm">' + esc(teamName(t)) + '</span>' +
         '<span class="num">' + esc(t.gp) + '</span>' +
         '<span class="num">' + esc(t.record) + '</span>' +
         '<span class="num">' + esc(t.gd) + '</span>' +
@@ -858,11 +900,13 @@ $('refreshBtn').addEventListener('click', () => fetchData(true));
 $('autoBtn').addEventListener('click', () => toggleMenu(!$('autoMenu').classList.contains('open')));
 $('menuBackdrop').addEventListener('click', () => toggleMenu(false));
 $('autoMenu').addEventListener('click', ev => {
-  const b = ev.target.closest('button[data-mode]');
-  if (b) setRefreshMode(b.dataset.mode);
+  const b = ev.target.closest('button');
+  if (!b) return;
+  if (b.dataset.mode) setRefreshMode(b.dataset.mode);
+  else if (b.dataset.lang) setLang(b.dataset.lang);
 });
 document.querySelectorAll('#autoMenu button').forEach(b =>
-  b.classList.toggle('sel', b.dataset.mode === refreshMode));
+  b.classList.toggle('sel', b.dataset.mode === refreshMode || b.dataset.lang === lang));
 $('todayBtn').addEventListener('click', () => {
   if (filter !== 'all') { filter = 'all'; renderChips(); renderSchedule(); }
   scrollToCurrent(true);
