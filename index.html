@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>World Cup 2026 — Live</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23161b22' stroke='%233fb950' stroke-width='2'/%3E%3Cpath d='M16 9.5l6.2 4.5-2.4 7.3h-7.6L9.8 14z' fill='%233fb950'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --card2: #1c2330;
+    --border: #2a313c;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --faint: #6e7681;
+    --live: #3fb950;
+    --live-dim: rgba(63, 185, 80, .12);
+    --next: #d29922;
+    --next-dim: rgba(210, 153, 34, .10);
+    --topbar-h: 48px;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    height: calc(var(--topbar-h) + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(13, 17, 23, .88);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+  }
+  .topbar h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: .2px; }
+  .topbar .updated { margin-left: auto; font-size: 11px; color: var(--faint); text-align: right; }
+  .topbar button {
+    background: none; border: none; color: var(--muted); padding: 6px;
+    border-radius: 8px; cursor: pointer; display: flex;
+  }
+  .topbar button:active { background: var(--card2); }
+  .topbar svg { width: 18px; height: 18px; }
+  .spinning { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  main { max-width: 640px; margin: 0 auto; padding: 12px 12px 0; }
+
+  /* ---------- hero ---------- */
+  .hero { margin-bottom: 14px; display: grid; gap: 10px; }
+  .hero-card {
+    border: 1px solid var(--border); border-radius: 16px;
+    background: var(--card); padding: 14px 14px 12px; cursor: pointer;
+  }
+  .hero-card.live { border-color: rgba(63,185,80,.55); background: linear-gradient(var(--live-dim), transparent 70%), var(--card); }
+  .hero-card.next { border-color: rgba(210,153,34,.45); background: linear-gradient(var(--next-dim), transparent 70%), var(--card); }
+  .hero-tag {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  }
+  .hero-card.live .hero-tag { color: var(--live); }
+  .hero-card.next .hero-tag { color: var(--next); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
+  .hero-row { display: flex; align-items: center; margin: 12px 0 8px; }
+  .hero-team { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+  .hero-team img { width: 52px; height: 52px; }
+  .hero-team .tname { font-size: 13px; font-weight: 600; text-align: center; line-height: 1.25; }
+  .hero-mid { flex: 0 0 auto; padding: 0 10px; text-align: center; }
+  .hero-score { font-size: 34px; font-weight: 800; letter-spacing: 1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hero-vs { font-size: 16px; font-weight: 700; color: var(--faint); }
+  .hero-sub { text-align: center; font-size: 12.5px; color: var(--muted); }
+  .hero-sub b { color: var(--text); font-weight: 600; }
+  .hero-meta { text-align: center; font-size: 11.5px; color: var(--faint); margin-top: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pens { font-size: 13px; color: var(--muted); font-weight: 600; }
+
+  /* ---------- filter chips ---------- */
+  .chips {
+    display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 12px;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; border: 1px solid var(--border); background: var(--card);
+    color: var(--muted); font-size: 12.5px; font-weight: 600;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  }
+  .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+
+  /* ---------- schedule ---------- */
+  .day { scroll-margin-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 8px); }
+  .day-h {
+    position: sticky; top: calc(var(--topbar-h) + env(safe-area-inset-top)); z-index: 20;
+    font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+    color: var(--muted); padding: 10px 4px 8px;
+    background: linear-gradient(var(--bg) 75%, transparent);
+  }
+  .day-h .today-tag { color: var(--live); }
+  .games { display: grid; gap: 8px; margin-bottom: 14px; }
+  .game {
+    display: grid; grid-template-columns: 58px 1fr; gap: 4px 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; align-items: center;
+  }
+  .game.live { border-color: rgba(63,185,80,.55); background: linear-gradient(90deg, var(--live-dim), transparent 55%), var(--card); }
+  .game.post { opacity: .82; }
+  .when { text-align: center; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; align-self: center; grid-row: span 2; }
+  .when .live-clock { color: var(--live); font-weight: 800; font-size: 13px; }
+  .when .ft { font-weight: 700; color: var(--faint); }
+  .teams { display: grid; gap: 5px; min-width: 0; }
+  .trow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .trow img { width: 20px; height: 20px; flex: 0 0 auto; }
+  .trow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .trow .nm.tbd { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .trow .sc { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 16px; text-align: right; }
+  .game.live .sc { color: var(--live); }
+  .post .loser .nm, .post .loser .sc { color: var(--muted); font-weight: 400; }
+  .gmeta {
+    grid-column: 2; font-size: 11px; color: var(--faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-top: 1px;
+  }
+
+  /* ---------- misc ---------- */
+  .state-panel { text-align: center; color: var(--muted); padding: 60px 20px; }
+  .state-panel button {
+    margin-top: 14px; background: var(--card2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; padding: 9px 18px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .loader { width: 26px; height: 26px; margin: 0 auto 12px; border: 3px solid var(--border);
+    border-top-color: var(--live); border-radius: 50%; animation: spin .9s linear infinite; }
+  #banner {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 40;
+    background: #3d2300; color: #f0b95c; border: 1px solid #7a4d00;
+    font-size: 12.5px; padding: 8px 14px; border-radius: 999px;
+    opacity: 0; pointer-events: none; transition: opacity .3s; white-space: nowrap;
+  }
+  #banner.show { opacity: 1; }
+  #todayBtn {
+    position: fixed; right: max(14px, env(safe-area-inset-right));
+    bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 40;
+    background: var(--card2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 999px; padding: 10px 16px; font-size: 13px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.45); display: none;
+  }
+  .src-note { text-align: center; font-size: 10.5px; color: var(--faint); padding: 18px 0 8px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>World Cup 2026</h1>
+  <div class="updated" id="updated"></div>
+  <button id="refreshBtn" aria-label="Refresh" title="Refresh">
+    <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
+    </svg>
+  </button>
+</header>
+
+<main>
+  <section class="hero" id="hero"></section>
+  <nav class="chips" id="chips" style="display:none"></nav>
+  <section id="schedule">
+    <div class="state-panel"><div class="loader"></div>Loading matches…</div>
+  </section>
+  <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
+</main>
+
+<button id="todayBtn">↓ Today</button>
+<div id="banner">Couldn’t update — retrying</div>
+
+<script>
+'use strict';
+
+const API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=200';
+
+const ROUND_NAMES = {
+  'group-stage': 'Group Stage',
+  'round-of-32': 'Round of 32',
+  'round-of-16': 'Round of 16',
+  'quarterfinals': 'Quarter-final',
+  'semifinals': 'Semi-final',
+  '3rd-place-match': 'Third Place',
+  'final': 'Final',
+};
+const CHIP_DEFS = [
+  { id: 'all', label: 'All' },
+  { id: 'group-stage', label: 'Groups' },
+  { id: 'round-of-32', label: 'R32' },
+  { id: 'round-of-16', label: 'R16' },
+  { id: 'quarterfinals', label: 'QF' },
+  { id: 'semifinals', label: 'SF' },
+  { id: 'finals', label: 'Finals', slugs: ['3rd-place-match', 'final'] },
+];
+window.CREST_URI = 'data:image/svg+xml,' + encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='#6e7681' stroke-width='2'>" +
+  "<circle cx='16' cy='16' r='13'/><path d='M16 10l5.5 4-2.1 6.4h-6.8L10.5 14z' fill='#6e7681' stroke='none'/></svg>");
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let events = [];          // normalized, sorted by kickoff
+let filter = 'all';
+let lastUpdated = null;
+let fetching = false;
+let refreshTimer = null;
+let didAutoScroll = false;
+let kickoffFetched = false;
+
+/* ---------------- data ---------------- */
+
+function normTeam(x) {
+  const t = x.team || {};
+  const name = t.shortDisplayName || t.displayName || 'TBD';
+  return {
+    name,
+    abbr: t.abbreviation || '',
+    logo: t.logo || '',
+    score: x.score,
+    shootout: x.shootoutScore,
+    winner: x.winner === true,
+    tbd: !t.logo,   // knockout placeholders ("Round of 16 5 Winner") have no logo
+  };
+}
+
+function normalize(json) {
+  const out = [];
+  for (const e of (json.events || [])) {
+    const c = (e.competitions || [])[0];
+    if (!c) continue;
+    const home = (c.competitors || []).find(x => x.homeAway === 'home');
+    const away = (c.competitors || []).find(x => x.homeAway === 'away');
+    if (!home || !away) continue;
+    const st = e.status || c.status || {};
+    const ty = st.type || {};
+    out.push({
+      id: e.id,
+      date: new Date(e.date),
+      round: (e.season && e.season.slug) || 'group-stage',
+      state: ty.state || 'pre',                  // pre | in | post
+      statusName: ty.name || '',
+      shortDetail: ty.shortDetail || '',
+      clock: st.displayClock || '',
+      venue: (c.venue && c.venue.fullName) || '',
+      tv: (((c.broadcasts || [])[0] || {}).names || []).join(' · '),
+      home: normTeam(home),
+      away: normTeam(away),
+    });
+  }
+  out.sort((a, b) => a.date - b.date);
+  return out;
+}
+
+async function fetchData(manual) {
+  if (fetching) return;
+  fetching = true;
+  $('refreshIcon').classList.add('spinning');
+  try {
+    const res = await fetch(API, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    events = normalize(await res.json());
+    lastUpdated = new Date();
+    kickoffFetched = false;
+    $('banner').classList.remove('show');
+    render();
+  } catch (err) {
+    if (events.length) {
+      $('banner').classList.add('show');
+      setTimeout(() => $('banner').classList.remove('show'), 4000);
+    } else {
+      $('schedule').innerHTML =
+        '<div class="state-panel">Couldn’t load match data.<br>' +
+        '<small>' + esc(err.message) + '</small><br>' +
+        '<button onclick="fetchData(true)">Retry</button></div>';
+    }
+  } finally {
+    fetching = false;
+    $('refreshIcon').classList.remove('spinning');
+    scheduleRefresh();
+  }
+}
+
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  const now = Date.now();
+  const anyLive = events.some(e => e.state === 'in');
+  const next = events.find(e => e.state === 'pre');
+  let ms = 5 * 60 * 1000;                                   // idle: 5 min
+  if (anyLive) ms = 30 * 1000;                              // live: 30 s
+  else if (next && next.date - now < 15 * 60 * 1000) ms = 60 * 1000;  // near kickoff: 1 min
+  refreshTimer = setTimeout(fetchData, ms);
+}
+
+/* ---------------- formatting ---------------- */
+
+const fmtTime = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+const fmtDay = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+const dayKey = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+function relDay(d) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const that = new Date(d); that.setHours(0, 0, 0, 0);
+  const diff = Math.round((that - today) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  return null;
+}
+
+function countdownText(d) {
+  let s = Math.floor((d - Date.now()) / 1000);
+  if (s <= 0) return 'Kicking off…';
+  const dd = Math.floor(s / 86400); s %= 86400;
+  const hh = Math.floor(s / 3600); s %= 3600;
+  const mm = Math.floor(s / 60); const ss = s % 60;
+  if (dd > 0) return dd + 'd ' + hh + 'h';
+  if (hh > 0) return hh + 'h ' + mm + 'm';
+  return mm + 'm ' + String(ss).padStart(2, '0') + 's';
+}
+
+function liveClock(e) {
+  if (e.statusName.includes('HALFTIME')) return 'HT';
+  return e.clock || 'LIVE';
+}
+
+function logoImg(t) {
+  const src = t.logo || window.CREST_URI;
+  return '<img src="' + esc(src) + '" alt="" loading="lazy" ' +
+         'onerror="this.onerror=null;this.src=window.CREST_URI">';
+}
+
+function scoreStr(t) {
+  let s = esc(t.score ?? '');
+  if (t.shootout != null) s += ' <span class="pens">(' + esc(t.shootout) + ')</span>';
+  return s;
+}
+
+/* ---------------- rendering ---------------- */
+
+function render() {
+  renderHero();
+  renderChips();
+  renderSchedule();
+  $('updated').textContent = lastUpdated ? 'updated ' + fmtTime.format(lastUpdated) : '';
+  $('todayBtn').style.display = events.length ? 'block' : 'none';
+  maybeAutoScroll();
+}
+
+function heroCard(e, kind) {
+  const isLive = kind === 'live';
+  const tag = isLive
+    ? '<span class="dot"></span> Live · ' + esc(liveClock(e))
+    : 'Up Next';
+  const mid = isLive
+    ? '<div class="hero-score">' + scoreStr(e.home) + ' – ' + scoreStr(e.away) + '</div>'
+    : '<div class="hero-vs">vs</div>';
+  const rel = relDay(e.date);
+  const when = (rel ? rel : fmtDay.format(e.date)) + ' · ' + fmtTime.format(e.date);
+  const sub = isLive
+    ? ''
+    : '<div class="hero-sub">Kicks off in <b id="cd" data-ts="' + e.date.getTime() + '">' +
+      countdownText(e.date) + '</b> · ' + esc(when) + '</div>';
+  const meta = [ROUND_NAMES[e.round] || e.round, e.venue, e.tv].filter(Boolean).join(' · ');
+  return '<div class="hero-card ' + (isLive ? 'live' : 'next') + '" data-goto="' + esc(e.id) + '">' +
+    '<div class="hero-tag">' + tag + '</div>' +
+    '<div class="hero-row">' +
+      '<div class="hero-team">' + logoImg(e.home) + '<span class="tname">' + esc(e.home.name) + '</span></div>' +
+      '<div class="hero-mid">' + mid + '</div>' +
+      '<div class="hero-team">' + logoImg(e.away) + '<span class="tname">' + esc(e.away.name) + '</span></div>' +
+    '</div>' + sub +
+    '<div class="hero-meta">' + esc(meta) + '</div>' +
+  '</div>';
+}
+
+function renderHero() {
+  const live = events.filter(e => e.state === 'in');
+  let html = '';
+  if (live.length) {
+    html = live.map(e => heroCard(e, 'live')).join('');
+  } else {
+    const next = events.find(e => e.state === 'pre');
+    if (next) html = heroCard(next, 'next');
+  }
+  $('hero').innerHTML = html;
+}
+
+function renderChips() {
+  const el = $('chips');
+  if (!events.length) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = CHIP_DEFS.map(c =>
+    '<button class="chip' + (filter === c.id ? ' active' : '') + '" data-f="' + c.id + '">' + c.label + '</button>'
+  ).join('');
+}
+
+function matchesFilter(e) {
+  if (filter === 'all') return true;
+  const def = CHIP_DEFS.find(c => c.id === filter);
+  const slugs = def && def.slugs ? def.slugs : [filter];
+  return slugs.includes(e.round);
+}
+
+function gameRow(e) {
+  const cls = 'game ' + e.state;
+  let when;
+  if (e.state === 'in') when = '<span class="live-clock">' + esc(liveClock(e)) + '</span>';
+  else if (e.state === 'post') when = '<span class="ft">' + esc(e.shortDetail || 'FT') + '</span>';
+  else when = fmtTime.format(e.date);
+
+  const showScore = e.state !== 'pre';
+  const trow = (t, opp) => {
+    const lost = e.state === 'post' && !t.winner && (opp.winner || Number(t.score) < Number(opp.score));
+    return '<div class="trow' + (lost ? ' loser' : '') + '">' + logoImg(t) +
+      '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + esc(t.name) + '</span>' +
+      (showScore ? '<span class="sc">' + scoreStr(t) + '</span>' : '') +
+    '</div>';
+  };
+  const meta = [ROUND_NAMES[e.round] || e.round, e.venue, e.tv].filter(Boolean).join(' · ');
+  return '<div class="' + cls + '" id="g-' + esc(e.id) + '">' +
+    '<div class="when">' + when + '</div>' +
+    '<div class="teams">' + trow(e.home, e.away) + trow(e.away, e.home) + '</div>' +
+    '<div class="gmeta">' + esc(meta) + '</div>' +
+  '</div>';
+}
+
+function renderSchedule() {
+  const list = events.filter(matchesFilter);
+  if (!list.length) {
+    $('schedule').innerHTML = '<div class="state-panel">No matches.</div>';
+    return;
+  }
+  const days = new Map();
+  for (const e of list) {
+    const k = dayKey(e.date);
+    if (!days.has(k)) days.set(k, []);
+    days.get(k).push(e);
+  }
+  const todayK = dayKey(new Date());
+  let html = '';
+  for (const [k, games] of days) {
+    const d = games[0].date;
+    const rel = relDay(d);
+    html += '<section class="day" data-day="' + k + '">' +
+      '<div class="day-h">' + (rel ? '<span class="today-tag">' + rel + '</span> · ' : '') +
+      fmtDay.format(d) + (k === todayK ? '' : '') + '</div>' +
+      '<div class="games">' + games.map(gameRow).join('') + '</div></section>';
+  }
+  $('schedule').innerHTML = html;
+}
+
+function scrollToCurrent(smooth) {
+  // live game > next upcoming game > today's section > last section
+  const target = events.find(e => e.state === 'in') || events.find(e => e.state === 'pre');
+  let el = target && document.getElementById('g-' + target.id);
+  if (el) el = el.closest('.day');
+  if (!el) {
+    const secs = document.querySelectorAll('.day');
+    el = secs[secs.length - 1];
+  }
+  if (el) el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' });
+}
+
+function maybeAutoScroll() {
+  if (didAutoScroll || !events.length) return;
+  didAutoScroll = true;
+  // only scroll if the tournament already has past days (otherwise top is correct)
+  const first = events[0];
+  if (dayKey(first.date) < dayKey(new Date())) scrollToCurrent(false);
+}
+
+/* ---------------- ticking countdown ---------------- */
+
+setInterval(() => {
+  const cd = $('cd');
+  if (!cd) return;
+  const ts = Number(cd.dataset.ts);
+  cd.textContent = countdownText(new Date(ts));
+  // kickoff passed → refresh once so the hero flips to live
+  if (ts <= Date.now() && !kickoffFetched) {
+    kickoffFetched = true;
+    setTimeout(fetchData, 45 * 1000);   // give the API a moment to flip state
+  }
+}, 1000);
+
+/* ---------------- events ---------------- */
+
+$('refreshBtn').addEventListener('click', () => fetchData(true));
+$('todayBtn').addEventListener('click', () => {
+  if (filter !== 'all') { filter = 'all'; renderChips(); renderSchedule(); }
+  scrollToCurrent(true);
+});
+$('chips').addEventListener('click', ev => {
+  const b = ev.target.closest('.chip');
+  if (!b) return;
+  filter = b.dataset.f;
+  renderChips();
+  renderSchedule();
+});
+$('hero').addEventListener('click', ev => {
+  const card = ev.target.closest('.hero-card');
+  if (!card) return;
+  const g = document.getElementById('g-' + card.dataset.goto);
+  if (g) g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') fetchData();
+});
+
+fetchData();
+</script>
+</body>
+</html>
