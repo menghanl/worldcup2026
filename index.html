@@ -26,19 +26,21 @@
     --topbar-h: 48px;
   }
   * { box-sizing: border-box; }
-  html { color-scheme: dark; }
+  html { color-scheme: dark; height: 100%; }
   body {
     margin: 0;
     background: var(--bg);
     color: var(--text);
     font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
-    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+    /* app-style split layout: header + pinned hero, schedule scrolls on its own */
+    height: 100%; height: 100dvh;
+    display: flex; flex-direction: column; overflow: hidden;
   }
 
   /* ---------- top bar ---------- */
   .topbar {
-    position: sticky; top: 0; z-index: 30;
+    flex: none; z-index: 30;
     height: calc(var(--topbar-h) + env(safe-area-inset-top));
     padding-top: env(safe-area-inset-top);
     display: flex; align-items: center; gap: 10px;
@@ -84,10 +86,29 @@
   .menu button .chk { color: var(--live); font-weight: 700; visibility: hidden; }
   .menu button.sel .chk { visibility: visible; }
 
-  main { max-width: 640px; margin: 0 auto; padding: 12px 12px 0; }
+  main {
+    max-width: 640px; margin: 0 auto; padding: 12px 12px 0; width: 100%;
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view[hidden] { display: none; }
+  .scroller {
+    flex: 1; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
 
-  /* ---------- hero ---------- */
-  .hero { margin-bottom: 14px; display: grid; gap: 10px; }
+  /* ---------- hero (pinned; swipeable carousel when 2 games live) ---------- */
+  .hero {
+    flex: none; margin-bottom: 12px;
+    display: flex; gap: 10px; overflow-x: auto;
+    scroll-snap-type: x mandatory; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .hero::-webkit-scrollbar { display: none; }
+  .hero:empty { display: none; }
+  .hero-card { flex: 0 0 100%; scroll-snap-align: center; }
+  .hero:has(> .hero-card:nth-child(2)) .hero-card { flex-basis: 88%; }
   .hero-card {
     border: 1px solid var(--border); border-radius: 16px;
     background: var(--card); padding: 14px 14px 12px; cursor: pointer;
@@ -117,6 +138,7 @@
 
   /* ---------- filter chips ---------- */
   .chips {
+    flex: none;
     display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 12px;
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
@@ -128,10 +150,10 @@
   }
   .chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 
-  /* ---------- schedule ---------- */
-  .day { scroll-margin-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 8px); }
+  /* ---------- schedule (inside .scroller) ---------- */
+  .day { scroll-margin-top: 4px; }
   .day-h {
-    position: sticky; top: calc(var(--topbar-h) + env(safe-area-inset-top)); z-index: 20;
+    position: sticky; top: 0; z-index: 20;
     font-size: 12px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
     color: var(--muted); padding: 10px 4px 8px;
     background: linear-gradient(var(--bg) 75%, transparent);
@@ -268,23 +290,28 @@
 </header>
 
 <main>
-  <div id="matchesView">
+  <div id="matchesView" class="view">
     <section class="hero" id="hero"></section>
     <nav class="chips" id="chips" style="display:none"></nav>
-    <section id="schedule">
-      <div class="state-panel"><div class="loader"></div>Loading matches…</div>
-    </section>
-  </div>
-  <div id="groupsView" hidden>
-    <section class="groups" id="groups">
-      <div class="state-panel"><div class="loader"></div>Loading standings…</div>
-    </section>
-    <div class="legend">
-      <span class="sw" style="background:var(--live)"></span>Top 2 advance
-      <span class="sw" style="background:var(--next)"></span>3rd — may advance (8 best)
+    <div class="scroller" id="schedScroll">
+      <section id="schedule">
+        <div class="state-panel"><div class="loader"></div>Loading matches…</div>
+      </section>
+      <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
     </div>
   </div>
-  <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
+  <div id="groupsView" class="view" hidden>
+    <div class="scroller" id="groupScroll">
+      <section class="groups" id="groups">
+        <div class="state-panel"><div class="loader"></div>Loading standings…</div>
+      </section>
+      <div class="legend">
+        <span class="sw" style="background:var(--live)"></span>Top 2 advance
+        <span class="sw" style="background:var(--next)"></span>3rd — may advance (8 best)
+      </div>
+      <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
+    </div>
+  </div>
 </main>
 
 <nav class="tabbar">
@@ -789,7 +816,6 @@ function setView(v) {
   $('todayBtn').style.display = (v === 'matches' && events.length) ? 'block' : 'none';
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   if (v === 'groups' && Date.now() - standingsAt > 60 * 1000) fetchStandings();
-  window.scrollTo(0, 0);
 }
 
 function scrollToCurrent(smooth) {
