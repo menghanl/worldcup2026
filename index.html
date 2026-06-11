@@ -59,6 +59,31 @@
   .spinning { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ---------- auto-refresh menu ---------- */
+  #menuBackdrop { position: fixed; inset: 0; z-index: 55; display: none; }
+  #menuBackdrop.open { display: block; }
+  .menu {
+    position: fixed; right: 8px; z-index: 60;
+    top: calc(var(--topbar-h) + env(safe-area-inset-top) + 4px);
+    background: var(--card2); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .55); padding: 6px; min-width: 185px;
+    display: none;
+  }
+  .menu.open { display: block; }
+  .menu .mhead {
+    font-size: 10.5px; color: var(--faint); text-transform: uppercase;
+    letter-spacing: .8px; padding: 6px 12px 4px;
+  }
+  .menu button {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    width: 100%; background: none; border: none; color: var(--text);
+    font-size: 13.5px; font-weight: 500; padding: 9px 12px; border-radius: 8px;
+    cursor: pointer; text-align: left;
+  }
+  .menu button:active { background: var(--border); }
+  .menu button .chk { color: var(--live); font-weight: 700; visibility: hidden; }
+  .menu button.sel .chk { visibility: visible; }
+
   main { max-width: 640px; margin: 0 auto; padding: 12px 12px 0; }
 
   /* ---------- hero ---------- */
@@ -230,6 +255,11 @@
 <header class="topbar">
   <h1>World Cup 2026</h1>
   <div class="updated" id="updated"></div>
+  <button id="autoBtn" aria-label="Auto-refresh settings" title="Auto-refresh">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/>
+    </svg>
+  </button>
   <button id="refreshBtn" aria-label="Refresh" title="Refresh">
     <svg id="refreshIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/>
@@ -271,6 +301,16 @@
 <button id="todayBtn">↓ Today</button>
 <div id="banner">Couldn’t update — retrying</div>
 <div id="goalToast"></div>
+
+<div id="menuBackdrop"></div>
+<div class="menu" id="autoMenu">
+  <div class="mhead">Auto-refresh</div>
+  <button data-mode="smart">Smart — match-aware<span class="chk">✓</span></button>
+  <button data-mode="30">Every 30 sec<span class="chk">✓</span></button>
+  <button data-mode="60">Every 1 min<span class="chk">✓</span></button>
+  <button data-mode="300">Every 5 min<span class="chk">✓</span></button>
+  <button data-mode="off">Off<span class="chk">✓</span></button>
+</div>
 
 <script>
 'use strict';
@@ -316,6 +356,14 @@ let standings = null;     // [{letter, entries: [{id,name,logo,gp,record,gd,pts,
 let teamGroup = {};       // teamId -> group letter
 let standingsAt = 0;
 let prevScores = new Map();  // eventId -> "home-away" from previous poll
+
+// auto-refresh mode: 'smart' (match-aware) | seconds as string | 'off'
+const MODES = ['smart', '30', '60', '300', 'off'];
+const MODE_LABEL = { smart: 'auto', 30: '30s', 60: '1m', 300: '5m', off: 'off' };
+let refreshMode = (() => {
+  try { const m = localStorage.getItem('wc26-refresh'); return MODES.includes(m) ? m : 'smart'; }
+  catch { return 'smart'; }
+})();
 
 /* ---------------- data ---------------- */
 
@@ -498,13 +546,41 @@ async function fetchStandings() {
 
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
-  const now = Date.now();
-  const anyLive = events.some(e => e.state === 'in');
-  const next = events.find(e => e.state === 'pre');
-  let ms = 5 * 60 * 1000;                                   // idle: 5 min
-  if (anyLive) ms = 30 * 1000;                              // live: 30 s
-  else if (next && next.date - now < 15 * 60 * 1000) ms = 60 * 1000;  // near kickoff: 1 min
+  if (refreshMode === 'off') return;
+  let ms;
+  if (refreshMode === 'smart') {
+    const now = Date.now();
+    const anyLive = events.some(e => e.state === 'in');
+    const next = events.find(e => e.state === 'pre');
+    ms = 5 * 60 * 1000;                                     // idle: 5 min
+    if (anyLive) ms = 30 * 1000;                            // live: 30 s
+    else if (next && next.date - now < 15 * 60 * 1000) ms = 60 * 1000;  // near kickoff: 1 min
+  } else {
+    ms = Number(refreshMode) * 1000;
+  }
   refreshTimer = setTimeout(fetchData, ms);
+}
+
+function updatedLabel() {
+  const when = lastUpdated ? 'updated ' + fmtTime.format(lastUpdated) + ' · ' : '';
+  $('updated').textContent = when + MODE_LABEL[refreshMode];
+}
+
+function setRefreshMode(m) {
+  refreshMode = m;
+  try { localStorage.setItem('wc26-refresh', m); } catch {}
+  document.querySelectorAll('#autoMenu button').forEach(b =>
+    b.classList.toggle('sel', b.dataset.mode === m));
+  updatedLabel();
+  toggleMenu(false);
+  // turning auto back on with stale data -> catch up now; otherwise just reschedule
+  if (m !== 'off' && lastUpdated && Date.now() - lastUpdated.getTime() > 60 * 1000) fetchData();
+  else scheduleRefresh();
+}
+
+function toggleMenu(open) {
+  $('autoMenu').classList.toggle('open', open);
+  $('menuBackdrop').classList.toggle('open', open);
 }
 
 /* ---------------- formatting ---------------- */
@@ -567,7 +643,7 @@ function render() {
   renderHero();
   renderChips();
   renderSchedule();
-  $('updated').textContent = lastUpdated ? 'updated ' + fmtTime.format(lastUpdated) : '';
+  updatedLabel();
   $('todayBtn').style.display = (view === 'matches' && events.length) ? 'block' : 'none';
   const live = events.find(e => e.state === 'in');
   document.title = live
@@ -744,7 +820,7 @@ setInterval(() => {
   const ts = Number(cd.dataset.ts);
   cd.textContent = countdownText(new Date(ts));
   // kickoff passed → refresh once so the hero flips to live
-  if (ts <= Date.now() && !kickoffFetched) {
+  if (ts <= Date.now() && !kickoffFetched && refreshMode !== 'off') {
     kickoffFetched = true;
     setTimeout(fetchData, 45 * 1000);   // give the API a moment to flip state
   }
@@ -753,6 +829,14 @@ setInterval(() => {
 /* ---------------- events ---------------- */
 
 $('refreshBtn').addEventListener('click', () => fetchData(true));
+$('autoBtn').addEventListener('click', () => toggleMenu(!$('autoMenu').classList.contains('open')));
+$('menuBackdrop').addEventListener('click', () => toggleMenu(false));
+$('autoMenu').addEventListener('click', ev => {
+  const b = ev.target.closest('button[data-mode]');
+  if (b) setRefreshMode(b.dataset.mode);
+});
+document.querySelectorAll('#autoMenu button').forEach(b =>
+  b.classList.toggle('sel', b.dataset.mode === refreshMode));
 $('todayBtn').addEventListener('click', () => {
   if (filter !== 'all') { filter = 'all'; renderChips(); renderSchedule(); }
   scrollToCurrent(true);
