@@ -182,6 +182,7 @@
   .trow img { width: 20px; height: 20px; flex: 0 0 auto; }
   .trow .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
   .trow .nm.tbd { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .nm-en { font-size: 11px; color: var(--muted); font-weight: 400; }
   .trow .sc { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 16px; text-align: right; }
   .game.live .sc { color: var(--live); }
   .post .loser .nm, .post .loser .sc { color: var(--muted); font-weight: 400; }
@@ -814,8 +815,12 @@ function gameRow(e) {
   const trow = (t, opp) => {
     const lost = e.state === 'post' && !t.winner && (opp.winner || Number(t.score) < Number(opp.score));
     const sc = scorersFor(e, t);
+    // schedule rows only: in Chinese mode append the English name small
+    const tn = teamName(t);
+    const nameHtml = esc(tn) +
+      (lang === 'zh' && tn !== t.name ? ' <span class="nm-en">' + esc(t.name) + '</span>' : '');
     return '<div class="trow' + (lost ? ' loser' : '') + '">' + logoImg(t) +
-      '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + esc(teamName(t)) + '</span>' +
+      '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + nameHtml + '</span>' +
       (showScore ? '<span class="sc">' + scoreStr(t) + '</span>' : '') +
     '</div>' +
     (sc ? '<div class="scorers">' + esc(sc) + '</div>' : '');
