@@ -394,6 +394,8 @@ let kickoffFetched = false;
 let standings = null;     // [{letter, entries: [{id,name,logo,gp,record,gd,pts,rank}]}]
 let teamGroup = {};       // teamId -> group letter
 let standingsAt = 0;
+let eventsSig = '';       // signature of last rendered events
+let standingsSig = '';    // signature of last rendered standings
 let prevScores = new Map();  // eventId -> "home-away" from previous poll
 
 // auto-refresh mode: 'smart' (match-aware) | seconds as string | 'off'
@@ -519,7 +521,15 @@ async function fetchData(manual) {
     kickoffFetched = false;
     $('banner').classList.remove('show');
     const goals = detectGoalChanges();
-    render();
+    // skip DOM rebuild when nothing changed — keeps flag <img>s stable
+    // between polls (no flicker) and is cheaper
+    const sig = JSON.stringify(events);
+    if (sig !== eventsSig) {
+      eventsSig = sig;
+      render();
+    } else {
+      updatedLabel();
+    }
     announceGoals(goals);
     if (Date.now() - standingsAt > 60 * 1000) fetchStandings();
   } catch (err) {
@@ -608,8 +618,12 @@ async function fetchStandings() {
     if (groups.length) {
       standings = groups;
       standingsAt = Date.now();
-      renderGroups();
-      if (view === 'matches') { renderHero(); renderSchedule(); }  // meta lines gain group letters
+      const sig = JSON.stringify(groups);
+      if (sig !== standingsSig) {   // only rebuild DOM when tables changed
+        standingsSig = sig;
+        renderGroups();
+        if (view === 'matches') { renderHero(); renderSchedule(); }  // meta lines gain group letters
+      }
     }
   } catch (err) {
     if (!standings) {
