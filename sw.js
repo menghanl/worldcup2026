@@ -1,5 +1,5 @@
 /* World Cup 2026 PWA service worker */
-const VERSION = 'wc26-v2';
+const VERSION = 'wc26-v3';
 const STATIC = [
   './',
   './index.html',
@@ -33,9 +33,11 @@ self.addEventListener('fetch', e => {
   if (url.hostname.endsWith('espn.com')) return;
 
   // App shell (same-origin): network-first so updates land immediately,
-  // cache fallback so the shell opens offline.
+  // cache fallback so the shell opens offline. cache:'no-cache' forces
+  // revalidation past the HTTP cache (GitHub Pages max-age=600), otherwise
+  // "network-first" can still serve a stale shell for up to 10 minutes.
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(res => {
         if (res.ok && url.origin === self.location.origin) {
           const copy = res.clone();
