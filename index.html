@@ -945,20 +945,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
-// TEMP diagnostic strip — standalone (installed) mode only; remove once the
-// iOS bottom-gap issue is confirmed fixed. Its own position is the test:
-// flush with the screen bottom = viewport OK; floating above a gap = short ICB.
-if (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches) {
-  const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99;background:#702;color:#fff;' +
-    'font:11px ui-monospace,monospace;padding:3px 8px;text-align:center;pointer-events:none';
-  d.style.paddingBottom = 'env(safe-area-inset-bottom)';
-  const f = () => d.textContent = 'v3 ih=' + innerHeight +
-    ' vv=' + (window.visualViewport ? Math.round(visualViewport.height) : '-') +
-    ' sh=' + screen.height + ' sab=' + getComputedStyle(d).paddingBottom;
-  document.body.appendChild(d); f();
-  if (window.visualViewport) visualViewport.addEventListener('resize', f);
-}
 
 fetchData();
 </script>
