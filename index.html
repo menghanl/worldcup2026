@@ -112,17 +112,12 @@
     padding-bottom: 12px;   /* tabbar is in flow below; no clearance needed */
   }
 
-  /* ---------- hero (pinned; swipeable carousel when 2 games live) ---------- */
+  /* ---------- hero (pinned; stacks vertically when 2+ games live) ---------- */
   .hero {
     flex: none; margin-bottom: 12px;
-    display: flex; gap: 10px; overflow-x: auto;
-    scroll-snap-type: x mandatory; scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column; gap: 10px;
   }
-  .hero::-webkit-scrollbar { display: none; }
   .hero:empty { display: none; }
-  .hero-card { flex: 0 0 100%; scroll-snap-align: center; }
-  .hero:has(> .hero-card:nth-child(2)) .hero-card { flex-basis: 88%; }
   .hero-card {
     border: 1px solid var(--border); border-radius: 12px;
     background: var(--card); padding: 14px 14px 12px; cursor: pointer;
