@@ -310,15 +310,14 @@
   .brk-leg .green { background: var(--live); } .brk-leg .amber { background: var(--next); }
   #brkCanvas { padding: 0 0 110px; }
   #brkCanvas svg { width: 100%; height: auto; display: block; }
-  #brkMap .brk-seg { fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; transition: opacity .25s, stroke-width .2s; }
-  #brkMap .brk-seg-left { stroke: var(--accent); } #brkMap .brk-seg-right { stroke: var(--next); } #brkMap .brk-seg-final { stroke: var(--text); }
-  #brkMap .brk-dashed { stroke-dasharray: 6 6; opacity: .55; }
+  #brkMap .brk-seg { fill: none; stroke: #454545; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; transition: opacity .25s, stroke-width .2s; }
+  #brkMap .brk-seg-up { stroke: var(--next); } #brkMap .brk-seg-live { stroke: var(--live); }
+  #brkMap .brk-dashed { stroke-dasharray: 6 6; opacity: .7; }
   #brkMap:not(.trace) .brk-seg.hot { stroke-width: 4.3; opacity: 1; }
   .brk-station { cursor: pointer; transition: opacity .25s; }
-  .brk-pill { fill: var(--card); stroke-width: 2.2; }
-  .brk-r-left { stroke: var(--accent); } .brk-r-right { stroke: var(--next); }
-  .brk-r-final { stroke: var(--text); stroke-width: 2.6; } .brk-r-live { stroke: var(--live); stroke-width: 2.4; }
-  .brk-r-spur { stroke: var(--faint); stroke-dasharray: 3 3; }
+  .brk-pill { fill: var(--card); stroke: #454545; stroke-width: 2.2; }   /* gray-500 — decided/default */
+  .brk-r-up { stroke: var(--next); } .brk-r-done { stroke: #454545; }
+  .brk-r-live { stroke: var(--live); stroke-width: 2.4; }
   .brk-hollow { fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-dasharray: 3 3; opacity: .85; }
   .brk-qmark { text-anchor: middle; dominant-baseline: central; fill: var(--faint); }
   .brk-station.rel .brk-pill { stroke-width: 3.1; }
@@ -1180,10 +1179,6 @@ const bpos = {};
   });
   bpos['3RD-0'] = { x: brkTHIRD.x, y: brkTHIRD.y, h: brkTHIRD.h };
 })();
-const brkSideOf = {};
-(function tag(round, i, s) { brkSideOf[round + '-' + i] = s; bChildren(round, i).forEach(c => tag(c.round, c.i, s)); })('SF', 0, 'left');
-(function tag(round, i, s) { brkSideOf[round + '-' + i] = s; bChildren(round, i).forEach(c => tag(c.round, c.i, s)); })('SF', 1, 'right');
-brkSideOf['F-0'] = 'final'; brkSideOf['3RD-0'] = 'spur';
 function bP(r, i) { return bpos[r + '-' + i]; }
 
 const brkReduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1280,10 +1275,10 @@ function brkImg(t, x, y, sz, op) {
   return '<image href="' + esc(t.logo || window.CREST_URI) + '" x="' + (x - sz / 2).toFixed(2) + '" y="' + (y - sz / 2).toFixed(2) +
     '" width="' + sz + '" height="' + sz + '" preserveAspectRatio="xMidYMid meet"' + o + '/>';
 }
-function brkStationSVG(m, p, tone) {
+function brkStationSVG(m, p) {
   const cx = p.x, cy = p.y;
   const post = m.state === 'post', live = m.state === 'live';
-  const ring = live ? 'live' : tone;
+  const ring = live ? 'live' : (post ? 'done' : 'up');   // colour = match state, not bracket side
   let w, h, inner = '';
   const pill = (ww, hh, rx) => '<rect class="brk-pill brk-r-' + ring + '" x="' + (cx - ww / 2).toFixed(2) + '" y="' + (cy - hh / 2) + '" width="' + ww + '" height="' + hh + '" rx="' + rx + '"/>';
   const livering = (ww, hh) => '<rect class="brk-livering" x="' + (cx - ww / 2 - 3).toFixed(2) + '" y="' + (cy - hh / 2 - 3) + '" width="' + (ww + 6) + '" height="' + (hh + 6) + '" rx="' + ((Math.min(ww, hh) + 6) / 2) + '"/>';
@@ -1318,13 +1313,13 @@ function renderBracketMap() {
       const par = bParentOf(r, i); if (!par) return;
       const pIds = bTeams(par.round, par.i), cIds = bTeams(r, i);
       const inter = cIds.filter(id => pIds.indexOf(id) >= 0);
-      const cls = 'brk-seg brk-seg-' + (brkSideOf[r + '-' + i] || 'left') + (m.state !== 'post' ? ' brk-dashed' : '');
+      const cls = 'brk-seg' + (m.state === 'live' ? ' brk-seg-live' : m.state === 'pre' ? ' brk-seg-up brk-dashed' : '');
       seg += '<path class="' + cls + '" data-ids="' + inter.join(',') + '" data-cr="' + r + '" data-ci="' + i + '" data-pr="' + par.round + '" data-pi="' + par.i + '" d="' + brkRP(brkConnPts(bP(r, i), bP(par.round, par.i)), 9) + '"/>';
     });
   });
   let st = '';
-  ['R32', 'R16', 'QF', 'SF', 'F'].forEach(r => (M.rounds[r] || []).forEach((m, i) => { st += brkStationSVG(m, bP(r, i), r === 'F' ? 'final' : (brkSideOf[r + '-' + i] || 'left')); }));
-  if (M.third) st += brkStationSVG(M.third, bP('3RD', 0), 'spur');
+  ['R32', 'R16', 'QF', 'SF', 'F'].forEach(r => (M.rounds[r] || []).forEach((m, i) => { st += brkStationSVG(m, bP(r, i)); }));
+  if (M.third) st += brkStationSVG(M.third, bP('3RD', 0));
   let lab = '';
   [['R32', brkRY.R32], ['R16', brkRY.R16], ['QF', brkRY.QF], ['SF', brkRY.SF]].forEach(a => {
     lab += '<text class="brk-rlabel" x="9" y="' + a[1] + '" transform="rotate(-90 9 ' + a[1] + ')">' + a[0] + '</text>';
