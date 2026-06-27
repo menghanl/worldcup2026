@@ -1,5 +1,5 @@
 /* World Cup 2026 PWA service worker */
-const VERSION = 'wc26-v15';
+const VERSION = 'wc26-v17';
 const STATIC = [
   './',
   './index.html',
