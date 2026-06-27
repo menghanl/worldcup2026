@@ -33,6 +33,19 @@
     --next-dim: rgba(255, 174, 0, .10);
     --topbar-h: 48px;
   }
+  /* Display P3 — Geist ships wide-gamut accents; match Vercel on P3 screens (sRGB hex above is the fallback) */
+  @media (color-gamut: p3) {
+    :root {
+      --accent: oklch(57.61% 0.2321 258.23);            /* blue-700 */
+      --accent-text: oklch(71.7% 0.1648 250.79);        /* blue-900 */
+      --live: oklch(73.1% 0.2158 148.29);               /* green-900 */
+      --live-border: oklch(73.1% 0.2158 148.29 / .5);
+      --live-dim: oklch(73.1% 0.2158 148.29 / .12);
+      --next: oklch(81.87% 0.1969 76.46);               /* amber-700 */
+      --next-border: oklch(81.87% 0.1969 76.46 / .45);
+      --next-dim: oklch(81.87% 0.1969 76.46 / .12);
+    }
+  }
   * { box-sizing: border-box; }
   /* Geist: visible focus on every interactive element (two-layer ring via offset) */
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -298,13 +311,13 @@
   #brkCanvas { padding: 0 0 110px; }
   #brkCanvas svg { width: 100%; height: auto; display: block; }
   #brkMap .brk-seg { fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; transition: opacity .25s, stroke-width .2s; }
-  #brkMap .brk-seg-left { stroke: var(--accent); } #brkMap .brk-seg-right { stroke: var(--next); } #brkMap .brk-seg-final { stroke: #fff; }
+  #brkMap .brk-seg-left { stroke: var(--accent); } #brkMap .brk-seg-right { stroke: var(--next); } #brkMap .brk-seg-final { stroke: var(--text); }
   #brkMap .brk-dashed { stroke-dasharray: 6 6; opacity: .55; }
   #brkMap:not(.trace) .brk-seg.hot { stroke-width: 4.3; opacity: 1; }
   .brk-station { cursor: pointer; transition: opacity .25s; }
   .brk-pill { fill: var(--card); stroke-width: 2.2; }
   .brk-r-left { stroke: var(--accent); } .brk-r-right { stroke: var(--next); }
-  .brk-r-final { stroke: #fff; stroke-width: 2.6; } .brk-r-live { stroke: var(--live); stroke-width: 2.4; }
+  .brk-r-final { stroke: var(--text); stroke-width: 2.6; } .brk-r-live { stroke: var(--live); stroke-width: 2.4; }
   .brk-r-spur { stroke: var(--faint); stroke-dasharray: 3 3; }
   .brk-hollow { fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-dasharray: 3 3; opacity: .85; }
   .brk-qmark { text-anchor: middle; dominant-baseline: central; fill: var(--faint); }
@@ -312,7 +325,7 @@
   .brk-station.rel { filter: drop-shadow(0 0 3px rgba(255,255,255,.42)); }
   .brk-livering { fill: none; stroke: var(--live); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: brkring 1.8s ease-out infinite; }
   @keyframes brkring { 0% { transform: scale(1); opacity: .6; } 70% { opacity: 0; } 100% { transform: scale(1.5); opacity: 0; } }
-  .brk-station.flash .brk-pill { stroke: #fff; stroke-width: 3.6; }
+  .brk-station.flash .brk-pill { stroke: var(--text); stroke-width: 3.6; }
   .brk-focusring { pointer-events: none; transition: transform .26s cubic-bezier(.2,.7,.3,1); }
   .brk-focusring rect { fill: none; stroke: var(--accent-text); stroke-width: 2.4; filter: drop-shadow(0 0 4px rgba(71,168,255,.65)); }
   .brk-rlabel { text-anchor: middle; fill: var(--faint); font-size: 9px; font-weight: 700; letter-spacing: 1.4px; }
@@ -330,7 +343,7 @@
     max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
   .brk-clearbtn.show { display: block; }
   .brk-lens { position: relative; flex: none; height: 40vh; min-height: 246px; overflow: hidden; margin: 0 -12px;
-    border-top: 1px solid var(--border); background: linear-gradient(var(--card2), #131313); box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+    border-top: 1px solid var(--border); background: linear-gradient(var(--card2), var(--card)); box-shadow: 0 -8px 24px rgba(0,0,0,.5);
     display: flex; align-items: center; justify-content: center; padding: 8px 0 20px; touch-action: pan-y; }
   .brk-lens-inner { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 0 12px; will-change: transform, opacity; }
   .brk-lhead { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 330px; }
@@ -1146,11 +1159,11 @@ const brkLeafOrder = (() => {
   return out;
 })();
 // static geometry (topology is fixed, so positions never change)
-const brkW = 390, brkH = 410, brkML = 32, brkMR = 24;   // wider left margin clears the rotated round labels
+const brkW = 390, brkH = 328, brkML = 32, brkMR = 24;   // wider left margin clears the rotated round labels
 const brkStep = (brkW - brkML - brkMR) / 15;   // horizontal spacing of the 16 R32 stations
-const brkRY = { R32: 44, R16: 118, QF: 192, SF: 266, F: 356 };
+const brkRY = { R32: 40, R16: 90, QF: 142, SF: 196, F: 278 };
 const brkRH = { R32: 28, R16: 20, QF: 24, SF: 30, F: 40 };
-const brkTHIRD = { x: 56, y: 330, h: 22 };
+const brkTHIRD = { x: 56, y: 252, h: 22 };
 const bpos = {};
 (() => {
   const leafX = {};
