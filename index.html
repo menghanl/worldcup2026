@@ -426,8 +426,8 @@
   .brk-dest.champ { cursor: default; border-style: dashed; border-color: var(--next-border); background: linear-gradient(var(--next-dim), transparent); }
   .brk-dest.champ .db { color: var(--next); }
   .brk-chev { position: absolute; top: 50%; transform: translateY(-50%); z-index: 5; width: 30px; height: 30px; border-radius: 50%;
-    border: 1px solid var(--border); background: rgba(26,26,26,.8); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+    border: 1px solid var(--border); background: var(--bar-bg); color: var(--muted); font-size: 18px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: var(--shadow); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
   .brk-chev.left { left: 4px; } .brk-chev.right { right: 4px; }
   .brk-chev:active { background: var(--card2); color: var(--text); }
   .brk-chev:disabled { opacity: .22; cursor: default; }
