@@ -1111,6 +1111,7 @@ function setView(v) {
   document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   if (v === 'groups' && Date.now() - standingsAt > 60 * 1000) fetchStandings();
   if (v === 'bracket') renderBracket(true);
+  if (v === 'matches') requestAnimationFrame(maybeAutoScroll);
 }
 
 function scrollToCurrent(smooth) {
@@ -1126,7 +1127,7 @@ function scrollToCurrent(smooth) {
 }
 
 function maybeAutoScroll() {
-  if (didAutoScroll || !events.length) return;
+  if (didAutoScroll || !events.length || view !== 'matches') return;   // only once the schedule is actually visible
   didAutoScroll = true;
   // only scroll if the tournament already has past days (otherwise top is correct)
   const first = events[0];
