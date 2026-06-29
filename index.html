@@ -467,7 +467,7 @@
 </header>
 
 <main>
-  <div id="matchesView" class="view">
+  <div id="matchesView" class="view" hidden>
     <section class="hero" id="hero"></section>
     <nav class="chips" id="chips" style="display:none"></nav>
     <div class="scroller" id="schedScroll">
@@ -489,7 +489,7 @@
       <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
     </div>
   </div>
-  <div id="bracketView" class="view" hidden>
+  <div id="bracketView" class="view">
     <div class="brk-map-wrap">
       <div class="brk-pane" id="brkPane">
         <div class="brk-head">
@@ -516,17 +516,17 @@
 </main>
 
 <nav class="tabbar">
-  <button class="tab active" data-view="matches">
+  <button class="tab active" data-view="bracket">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 0 1-12 0V4z"/><path d="M6 6H3.5v1.5A3 3 0 0 0 6 11M18 6h2.5v1.5A3 3 0 0 1 18 11"/></svg>
+    Bracket
+  </button>
+  <button class="tab" data-view="matches">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
     Matches
   </button>
   <button class="tab" data-view="groups">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
     Groups
-  </button>
-  <button class="tab" data-view="bracket">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M6 4h12v4a6 6 0 0 1-12 0V4z"/><path d="M6 6H3.5v1.5A3 3 0 0 0 6 11M18 6h2.5v1.5A3 3 0 0 1 18 11"/></svg>
-    Bracket
   </button>
 </nav>
 
@@ -584,7 +584,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 
 let events = [];          // normalized, sorted by kickoff
 let filter = 'all';
-let view = 'matches';     // matches | groups
+let view = 'bracket';     // bracket | matches | groups
 let lastUpdated = null;
 let fetching = false;
 let refreshTimer = null;
