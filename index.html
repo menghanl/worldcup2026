@@ -311,13 +311,22 @@
   .legend { font-size: 10.5px; color: var(--faint); padding: 8px 4px 0; }
   .legend .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: baseline; }
 
-  /* ---------- goal scorers ---------- */
+  /* ---------- goal scorers + penalty shootout dots ---------- */
   .scorers { font-size: 10.5px; color: var(--muted); padding-left: 28px; line-height: 1.35;
     overflow-wrap: anywhere; word-break: break-word; }
   .scorers .g + .g::before, .hero-scorers .g + .g::before { content: ' · '; color: var(--faint); }
   .hero-scorers { display: flex; margin-top: 2px; gap: 4px; align-items: flex-start; }
   .hero-scorers > div { flex: 1; min-width: 0; text-align: center; font-size: 10.5px; color: var(--muted); padding: 0 4px;
     line-height: 1.35; overflow-wrap: anywhere; word-break: break-word; }
+  .pk-row { display: flex; align-items: center; gap: 3.5px; padding: 2px 0 2px 28px; min-height: 12px; }
+  .hero-pks { display: flex; gap: 4px; margin-top: 4px; }
+  .hero-pks .pk-row { flex: 1; justify-content: center; padding-left: 0; }
+  .brk-pks { padding: 0 13px 6px 47px; }
+  .pk { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; box-sizing: border-box; }
+  .pk.pend { background: transparent; border: 1.2px solid var(--faint); opacity: .45; }
+  .pk.ok { background: #22c55e; border: 1.2px solid #22c55e; }
+  .pk.miss { background: #ef4444; border: 1.2px solid #ef4444; }
+  .pk-div { width: 1px; height: 9px; background: var(--border); margin: 0 2px; flex: 0 0 auto; }
 
   /* ---------- goal flash + toast ---------- */
   @keyframes goalflash {
@@ -562,6 +571,9 @@
 
 const API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=200';
 const STANDINGS_API = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026';
+const SUMMARY_API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=';
+// eventId -> { key, byTeam: { [teamId]: boolean[] } }  (true = scored, false = missed)
+const pensCache = new Map();
 
 const ROUND_NAMES = {
   'group-stage': 'Group Stage',
@@ -691,10 +703,12 @@ function normTeam(x) {
 }
 
 // scoring plays from competition.details -> [{teamId, text: "Doe 23' (P)"}]
+// Shootout kicks (d.shootout) are excluded — shown as pk dots instead.
+// In-match penalties (type 98) still appear as goals with (P).
 function parseGoals(details) {
   const out = [];
   for (const d of (details || [])) {
-    if (!d.scoringPlay) continue;
+    if (!d.scoringPlay || d.shootout) continue;
     const typeText = ((d.type || {}).text || '').toLowerCase();
     const ath = (d.athletesInvolved || [])[0] || {};
     let name = ath.shortName || ath.displayName || '';
@@ -702,11 +716,53 @@ function parseGoals(details) {
     if (name.split(' ').length > 2) name = name.split(' ').slice(-1)[0];
     const min = (d.clock || {}).displayValue || '';
     let suffix = '';
-    if (typeText.includes('penalty')) suffix = ' (P)';
-    else if (typeText.includes('own')) suffix = ' (OG)';
+    if (typeText.includes('penalty') || d.penaltyKick) suffix = ' (P)';
+    else if (typeText.includes('own') || d.ownGoal) suffix = ' (OG)';
     out.push({ teamId: String((d.team || {}).id || ''), text: (name + ' ' + min + suffix).trim() });
   }
   return out;
+}
+
+function eventNeedsPens(e) {
+  return e.home.shootout != null || e.away.shootout != null ||
+    /PEN/i.test(e.statusName || '') || /Pens|penalt/i.test(e.shortDetail || '');
+}
+function pensKey(e) {
+  return (e.home.shootout ?? '') + '-' + (e.away.shootout ?? '') + '|' + e.state + '|' + (e.statusName || '');
+}
+function attachCachedPens(list) {
+  for (const e of list) {
+    const c = pensCache.get(e.id);
+    if (c) e.pens = c.byTeam;
+  }
+}
+async function fetchPens() {
+  const targets = events.filter(eventNeedsPens);
+  if (!targets.length) return false;
+  let changed = false;
+  await Promise.all(targets.map(async e => {
+    const key = pensKey(e);
+    const cached = pensCache.get(e.id);
+    if (cached && cached.key === key && e.state === 'post') {
+      if (e.pens !== cached.byTeam) { e.pens = cached.byTeam; changed = true; }
+      return;
+    }
+    try {
+      const res = await fetch(SUMMARY_API + encodeURIComponent(e.id), { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      const byTeam = {};
+      for (const row of (json.shootout || [])) {
+        const shots = (row.shots || []).slice().sort((a, b) => (a.shotNumber || 0) - (b.shotNumber || 0));
+        byTeam[String(row.id)] = shots.map(s => !!s.didScore);
+      }
+      const prev = pensCache.get(e.id);
+      pensCache.set(e.id, { key, byTeam });
+      e.pens = byTeam;
+      if (!prev || prev.key !== key || JSON.stringify(prev.byTeam) !== JSON.stringify(byTeam)) changed = true;
+    } catch (err) { /* keep stale pens if any */ }
+  }));
+  return changed;
 }
 
 function normalize(json) {
@@ -746,6 +802,7 @@ async function fetchData(manual) {
     const res = await fetch(API, { cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     events = normalize(await res.json());
+    attachCachedPens(events);
     lastUpdated = new Date();
     kickoffFetched = false;
     $('banner').classList.remove('show');
@@ -760,6 +817,7 @@ async function fetchData(manual) {
       updatedLabel();
     }
     announceGoals(goals);
+    if (await fetchPens()) { eventsSig = JSON.stringify(events); render(); }
     if (Date.now() - standingsAt > 60 * 1000) fetchStandings();
   } catch (err) {
     if (events.length) {
@@ -783,7 +841,8 @@ function detectGoalChanges() {
   const changed = [];
   for (const e of events) {
     if (e.state === 'pre') continue;
-    const key = (e.home.score ?? '') + '-' + (e.away.score ?? '');
+    const key = (e.home.score ?? '') + '-' + (e.away.score ?? '') +
+      '|' + (e.home.shootout ?? '') + '-' + (e.away.shootout ?? '');
     const prev = prevScores.get(e.id);
     if (prev !== undefined && prev !== key) changed.push(e);
     prevScores.set(e.id, key);
@@ -955,6 +1014,24 @@ function scorersHTML(e, t, cls) {
   const inner = goalSpans(e, t);
   return inner ? '<div class="' + cls + '">' + inner + '</div>' : '';
 }
+// Penalty shootout row: at least 5 slots (gray if pending), divider, then sudden-death kicks.
+// Green = scored, red = missed, hollow gray = not taken yet.
+function pensRowHTML(e, t, extraCls) {
+  if (!eventNeedsPens(e)) return '';
+  const taken = (e.pens && e.pens[t.id]) || [];
+  const n = Math.max(5, taken.length);
+  let dots = '';
+  for (let i = 0; i < n; i++) {
+    if (i === 5) dots += '<span class="pk-div" aria-hidden="true"></span>';
+    const st = i < taken.length ? (taken[i] ? 'ok' : 'miss') : 'pend';
+    const label = st === 'ok' ? 'scored' : st === 'miss' ? 'missed' : 'pending';
+    dots += '<span class="pk ' + st + '" title="PK ' + (i + 1) + ' · ' + label + '"></span>';
+  }
+  return '<div class="pk-row' + (extraCls ? ' ' + extraCls : '') + '" aria-label="Penalty kicks">' + dots + '</div>';
+}
+function teamDetailHTML(e, t, scorersCls, pensCls) {
+  return scorersHTML(e, t, scorersCls) + pensRowHTML(e, t, pensCls);
+}
 
 function roundLabel(e) {
   if (e.round === 'group-stage') {
@@ -994,7 +1071,10 @@ function heroCard(e, kind) {
   let sub = '';
   if (isLive) {
     const hs = goalSpans(e, e.home), as = goalSpans(e, e.away);
-    if (hs || as) sub = '<div class="hero-scorers"><div>' + hs + '</div><div>' + as + '</div></div>';
+    if (hs || as) sub += '<div class="hero-scorers"><div>' + hs + '</div><div>' + as + '</div></div>';
+    if (eventNeedsPens(e)) {
+      sub += '<div class="hero-pks">' + pensRowHTML(e, e.home) + pensRowHTML(e, e.away) + '</div>';
+    }
   } else {
     sub = '<div class="hero-sub">Kicks off in <b id="cd" data-ts="' + e.date.getTime() + '">' +
       countdownText(e.date) + '</b> · ' + esc(when) + '</div>';
@@ -1057,7 +1137,7 @@ function gameRow(e) {
       '<span class="nm' + (t.tbd ? ' tbd' : '') + '">' + nameHtml + '</span>' +
       (showScore ? '<span class="sc">' + scoreStr(t) + '</span>' : '') +
     '</div>' +
-    scorersHTML(e, t, 'scorers');
+    teamDetailHTML(e, t, 'scorers', '');
   };
   const meta = [roundLabel(e), e.venue, e.tv].filter(Boolean).join(' · ');
   return '<div class="' + cls + '" id="g-' + esc(e.id) + '">' +
@@ -1494,7 +1574,7 @@ function brkCardHTML(m) {
     return '<div class="brk-row' + (lose ? ' lose' : '') + '"' + ((!t.tbd && t.id) ? ' data-id="' + esc(t.id) + '"' : '') + '>' +
       logoImg(t) + '<span class="brk-nm' + (t.tbd ? ' tbd' : '') + '">' + esc(teamName(t)) + '</span>' +
       (showSc ? '<span class="brk-sc">' + scoreStr(t) + '</span>' : '') + '</div>' +
-      scorersHTML(m.ev, t, 'brk-scorers');
+      teamDetailHTML(m.ev, t, 'brk-scorers', 'brk-pks');
   };
   return '<div class="brk-card ' + m.state + '">' + head + row(L) + row(R) + '</div>';
 }
