@@ -374,13 +374,20 @@
   .brk-r-live { stroke: var(--live); stroke-width: 2.4; }
   .brk-hollow { fill: none; stroke: var(--faint); stroke-width: 1.6; stroke-dasharray: 3 3; opacity: .85; }
   .brk-qmark { text-anchor: middle; dominant-baseline: central; fill: var(--faint); }
+  /* score inside taller R16+ pills (same width as before) */
+  .brk-score { fill: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums;
+    text-anchor: middle; dominant-baseline: central; letter-spacing: .02em; pointer-events: none;
+    opacity: .95; }
+  .brk-score.live { fill: var(--live); opacity: 1; }
+  .brk-score .pen { font-size: .8em; font-weight: 500; fill: var(--faint); letter-spacing: 0; }
+  .brk-score.live .pen { fill: color-mix(in srgb, var(--live) 55%, var(--faint)); }
   .brk-station.rel .brk-pill { stroke-width: 3.1; }
   .brk-station.rel { filter: drop-shadow(0 0 3px var(--glow)); }
-  .brk-livering { fill: none; stroke: var(--live); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: brkring 1.8s ease-out infinite; }
+  .brk-livering { fill: none; stroke: var(--live); stroke-width: 1.6; transform-box: fill-box; transform-origin: center; animation: brkring 1.8s ease-out infinite; }
   @keyframes brkring { 0% { transform: scale(1); opacity: .6; } 70% { opacity: 0; } 100% { transform: scale(1.5); opacity: 0; } }
   .brk-station.flash .brk-pill { stroke: var(--text); stroke-width: 3.6; }
   .brk-focusring { pointer-events: none; transition: transform .26s cubic-bezier(.2,.7,.3,1); }
-  .brk-focusring rect { fill: none; stroke: var(--accent-text); stroke-width: 2.4; filter: drop-shadow(0 0 4px rgba(71,168,255,.65)); }
+  .brk-focusring rect { fill: none; stroke: var(--accent-text); stroke-width: 1.8; filter: drop-shadow(0 0 3px rgba(71,168,255,.55)); }
   .brk-rlabel { text-anchor: middle; fill: var(--faint); font-size: 9px; font-weight: 700; letter-spacing: 1.4px; }
   .brk-trophy { text-anchor: middle; dominant-baseline: central; font-size: 15px; }
   #brkMap.trace .brk-station { opacity: .25; } #brkMap.trace .brk-seg { opacity: .15; }
@@ -1334,11 +1341,13 @@ const brkLeafOrder = (() => {
   return out;
 })();
 // static geometry (topology is fixed, so positions never change)
-const brkW = 390, brkH = 328, brkML = 32, brkMR = 24;   // wider left margin clears the rotated round labels
+const brkW = 390, brkH = 340, brkML = 32, brkMR = 24;   // wider left margin clears the rotated round labels
 const brkStep = (brkW - brkML - brkMR) / 15;   // horizontal spacing of the 16 R32 stations
-const brkRY = { R32: 40, R16: 90, QF: 142, SF: 196, F: 278 };
-const brkRH = { R32: 28, R16: 20, QF: 24, SF: 30, F: 40 };
-const brkTHIRD = { x: 56, y: 252, h: 22 };
+// R16+ taller so score fits inside; brkRW keeps prior dual-crest widths (no wider bubbles)
+const brkRY = { R32: 38, R16: 96, QF: 156, SF: 218, F: 290 };
+const brkRH = { R32: 28, R16: 34, QF: 36, SF: 38, F: 42 };
+const brkRW = { R16: 40, QF: 48, SF: 60, F: 80, '3RD': 44 };  // = old h*2
+const brkTHIRD = { x: 56, y: 262, h: 30 };
 const bpos = {};
 (() => {
   const leafX = {};
@@ -1434,7 +1443,8 @@ function defaultBrkFocus() {
 }
 function brkStructSig(M) {
   const parts = [];
-  const push = m => parts.push(m.round + m.i + (m.a.id || m.a.name) + (m.b.id || m.b.name) + (m.a.score ?? '') + (m.b.score ?? '') + m.state);
+  const push = m => parts.push(m.round + m.i + (m.a.id || m.a.name) + (m.b.id || m.b.name) +
+    (m.a.score ?? '') + (m.b.score ?? '') + (m.a.shootout ?? '') + (m.b.shootout ?? '') + m.state);
   ['R32', 'R16', 'QF', 'SF', 'F'].forEach(r => M.rounds[r].forEach(push));
   if (M.third) push(M.third);
   return parts.join('|');
@@ -1486,34 +1496,64 @@ function brkImg(t, x, y, sz, op) {
   return '<image href="' + esc(t.logo || window.CREST_URI) + '" x="' + (x - sz / 2).toFixed(2) + '" y="' + (y - sz / 2).toFixed(2) +
     '" width="' + sz + '" height="' + sz + '" preserveAspectRatio="xMidYMid meet"' + o + '/>';
 }
+// Score digit inside the pill under each crest (R16+). Pens: pen total + tiny "p".
+function brkMapSideScore(t, x, y, live, fontPx, isWin, post) {
+  if (!t || (t.score == null && t.shootout == null)) return '';
+  const n = (t.shootout != null) ? t.shootout : t.score;
+  const dim = post && !isWin ? ' opacity="0.4"' : '';
+  return '<text class="brk-score' + (live ? ' live' : '') + '" x="' + x.toFixed(2) + '" y="' + y.toFixed(2) +
+    '" font-size="' + fontPx + '"' + dim + '>' + esc(n ?? '') +
+    (t.shootout != null ? '<tspan class="pen" dx="0.4">p</tspan>' : '') + '</text>';
+}
 function brkStationSVG(m, p) {
   const cx = p.x, cy = p.y;
   const post = m.state === 'post', live = m.state === 'live';
   const ring = live ? 'live' : (post ? 'done' : 'up');   // colour = match state, not bracket side
   const [L, R] = brkSides(m);
+  const wT = post ? brkWin(m) : null;
+  // scores inside pill for R16+ only — R32 is too dense
+  const showSc = m.round !== 'R32' && m.state !== 'pre' &&
+    ((L && (L.score != null || L.shootout != null)) || (R && (R.score != null || R.shootout != null)));
   let w, h, inner = '';
-  const pill = (ww, hh, rx) => '<rect class="brk-pill brk-r-' + ring + '" x="' + (cx - ww / 2).toFixed(2) + '" y="' + (cy - hh / 2) + '" width="' + ww + '" height="' + hh + '" rx="' + rx + '"/>';
-  const livering = (ww, hh) => '<rect class="brk-livering" x="' + (cx - ww / 2 - 3).toFixed(2) + '" y="' + (cy - hh / 2 - 3) + '" width="' + (ww + 6) + '" height="' + (hh + 6) + '" rx="' + ((Math.min(ww, hh) + 6) / 2) + '"/>';
+  // rounded rect (not full capsule) — rx ~ 20–25% of shorter side
+  const rrect = (ww, hh) => {
+    const rx = Math.max(4, Math.min(ww, hh) * 0.22);
+    return '<rect class="brk-pill brk-r-' + ring + '" x="' + (cx - ww / 2).toFixed(2) + '" y="' + (cy - hh / 2) +
+      '" width="' + ww + '" height="' + hh + '" rx="' + rx.toFixed(2) + '"/>';
+  };
+  const livering = (ww, hh) => {
+    // tight halo just outside the station rect
+    const pad = 1.5, rx = Math.max(4, Math.min(ww, hh) * 0.22 + pad);
+    return '<rect class="brk-livering" x="' + (cx - ww / 2 - pad).toFixed(2) + '" y="' + (cy - hh / 2 - pad) +
+      '" width="' + (ww + pad * 2) + '" height="' + (hh + pad * 2) + '" rx="' + rx.toFixed(2) + '"/>';
+  };
   if (m.round === 'R32') {
-    // dense first round: narrow vertical node, two flags stacked (never collides)
+    // dense first round: narrow vertical node, two flags stacked (no score — too tight)
     h = p.h;
     const f = Math.floor((h - 6) / 2);
     w = f + 8;
-    const wT = post ? brkWin(m) : null;
     if (live) inner += livering(w, h);
-    inner += pill(w, h, w / 2);
-    inner += brkImg(L, cx, cy - (f / 2 + 1.5), f, post && wT && L !== wT ? 0.38 : 1);
-    inner += brkImg(R, cx, cy + (f / 2 + 1.5), f, post && wT && R !== wT ? 0.38 : 1);
+    inner += rrect(w, h);
+    inner += brkImg(L, cx, cy - (f / 2 + 1.5), f, post && wT && L !== wT ? 0.32 : 1);
+    inner += brkImg(R, cx, cy + (f / 2 + 1.5), f, post && wT && R !== wT ? 0.32 : 1);
   } else {
-    // always both crests side-by-side; dim the loser when decided
+    // same width as before (brkRW); taller height so crest + score fit inside
     h = p.h;
-    w = Math.round(h * 2.0);
-    const wT = post ? brkWin(m) : null;
+    w = brkRW[m.round] || Math.round(h * 2.0);
     if (live) inner += livering(w, h);
-    inner += pill(w, h, h / 2);
-    const fsz = Math.round(h * 0.82), off = w * 0.26;
-    inner += brkImg(L, cx - off, cy, fsz, post && wT && L !== wT ? 0.38 : 1);
-    inner += brkImg(R, cx + off, cy, fsz, post && wT && R !== wT ? 0.38 : 1);
+    inner += rrect(w, h);
+    const off = w * 0.26;
+    // crest size from width (not height) so taller pills don't blow up flags
+    const fsz = Math.round(w * 0.38);
+    const crestY = showSc ? (cy - h * 0.14) : cy;
+    inner += brkImg(L, cx - off, crestY, fsz, post && wT && L !== wT ? 0.32 : 1);
+    inner += brkImg(R, cx + off, crestY, fsz, post && wT && R !== wT ? 0.32 : 1);
+    if (showSc) {
+      const fs = Math.max(9, Math.min(12, Math.round(w * 0.24)));
+      const sy = cy + h * 0.24;
+      inner += brkMapSideScore(L, cx - off, sy, live, fs, wT && L === wT, post);
+      inner += brkMapSideScore(R, cx + off, sy, live, fs, wT && R === wT, post);
+    }
   }
   brkGeo[m.round + '-' + m.i] = { x: cx, y: cy, w, h };
   const ids = [L, R].filter(t => t && t.id && !t.tbd).map(t => t.id).join(',');
@@ -1626,9 +1666,10 @@ function syncBrkMap() {
   const fring = document.getElementById('brkFring'), rect = fring.querySelector('rect');
   const g = brkGeo[brkFocus.round + '-' + brkFocus.i];
   if (g) {
-    const pad = 5, rw = g.w + pad * 2, rh = g.h + pad * 2;
+    const pad = 2, rw = g.w + pad * 2, rh = g.h + pad * 2;
     rect.setAttribute('x', (-rw / 2).toFixed(2)); rect.setAttribute('y', (-rh / 2).toFixed(2));
-    rect.setAttribute('width', rw); rect.setAttribute('height', rh); rect.setAttribute('rx', (rh / 2).toFixed(2));
+    rect.setAttribute('width', rw); rect.setAttribute('height', rh);
+    rect.setAttribute('rx', Math.max(4, Math.min(rw, rh) * 0.22).toFixed(2));
     fring.setAttribute('transform', 'translate(' + g.x.toFixed(2) + ',' + g.y + ')'); fring.style.display = '';
   } else fring.style.display = 'none';
   const rel = brkRelatedKeys(), fkey = brkFocus.round + '-' + brkFocus.i;
