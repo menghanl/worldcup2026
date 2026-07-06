@@ -1505,13 +1505,15 @@ function brkStationSVG(m, p) {
     inner += brkImg(L, cx, cy - (f / 2 + 1.5), f, post && wT && L !== wT ? 0.38 : 1);
     inner += brkImg(R, cx, cy + (f / 2 + 1.5), f, post && wT && R !== wT ? 0.38 : 1);
   } else {
+    // always both crests side-by-side; dim the loser when decided
     h = p.h;
-    const single = post;
-    w = single ? h + 6 : Math.round(h * 2.0);
+    w = Math.round(h * 2.0);
+    const wT = post ? brkWin(m) : null;
     if (live) inner += livering(w, h);
     inner += pill(w, h, h / 2);
-    if (single) { const fsz = Math.min(Math.round(h * 0.9), w - 4); inner += brkImg(brkWin(m), cx, cy, fsz); }
-    else { const fsz = Math.round(h * 0.82), off = w * 0.26; inner += brkImg(L, cx - off, cy, fsz) + brkImg(R, cx + off, cy, fsz); }
+    const fsz = Math.round(h * 0.82), off = w * 0.26;
+    inner += brkImg(L, cx - off, cy, fsz, post && wT && L !== wT ? 0.38 : 1);
+    inner += brkImg(R, cx + off, cy, fsz, post && wT && R !== wT ? 0.38 : 1);
   }
   brkGeo[m.round + '-' + m.i] = { x: cx, y: cy, w, h };
   const ids = [L, R].filter(t => t && t.id && !t.tbd).map(t => t.id).join(',');
