@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-07-23T22:31:06Z",
+  "events": 104,
+  "penEvents": [
+    "760489",
+    "760488",
+    "760499",
+    "760508"
+  ],
+  "source": {
+    "scoreboard": "espn site.api scoreboard fifa.world 20260611-20260719",
+    "standings": "espn apis/v2 standings season=2026",
+    "pens": "espn summary shootout for pen events"
+  }
+}

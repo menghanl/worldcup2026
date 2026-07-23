@@ -502,7 +502,7 @@
       <section id="schedule">
         <div class="state-panel"><div class="loader"></div>Loading matches…</div>
       </section>
-      <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
+      <div class="src-note">Times shown in your local timezone · Data: ESPN · results archived in /data</div>
     </div>
   </div>
   <div id="groupsView" class="view" hidden>
@@ -514,7 +514,7 @@
         <span class="sw" style="background:var(--live)"></span>Top 2 advance
         <span class="sw" style="background:var(--next)"></span>3rd — may advance (8 best)
       </div>
-      <div class="src-note">Times shown in your local timezone · Data: ESPN</div>
+      <div class="src-note">Times shown in your local timezone · Data: ESPN · results archived in /data</div>
     </div>
   </div>
   <div id="bracketView" class="view">
@@ -582,11 +582,41 @@
 <script>
 'use strict';
 
-const API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=200';
-const STANDINGS_API = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026';
-const SUMMARY_API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=';
+const LIVE_API = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=200';
+const LIVE_STANDINGS = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026';
+const LIVE_SUMMARY = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=';
+// Frozen WC26 archive (checked into ./data/) — used when ESPN is unreachable
+const SNAP_API = './data/scoreboard.json';
+const SNAP_STANDINGS = './data/standings.json';
+const SNAP_PENS = './data/pens.json';
 // eventId -> { key, byTeam: { [teamId]: boolean[] } }  (true = scored, false = missed)
 const pensCache = new Map();
+let dataSource = 'snapshot'; // 'live' | 'snapshot'
+let pensSnapLoaded = false;
+
+// Prefer live ESPN; fall back to the local archive if the API is gone/offline.
+async function fetchJsonPreferLive(liveUrl, snapUrl) {
+  try {
+    const res = await fetch(liveUrl, { cache: 'no-store' });
+    if (res.ok) return { json: await res.json(), source: 'live' };
+  } catch (e) { /* fall through */ }
+  const res = await fetch(snapUrl);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' (snapshot)');
+  return { json: await res.json(), source: 'snapshot' };
+}
+
+async function loadPensSnapshot() {
+  if (pensSnapLoaded) return;
+  try {
+    const res = await fetch(SNAP_PENS);
+    if (!res.ok) return;
+    const pens = await res.json();
+    for (const [eid, byTeam] of Object.entries(pens || {})) {
+      if (!pensCache.has(eid)) pensCache.set(eid, { key: 'snap', byTeam });
+    }
+    pensSnapLoaded = true;
+  } catch (e) { /* optional */ }
+}
 
 const ROUND_NAMES = {
   'group-stage': 'Group Stage',
@@ -750,19 +780,21 @@ function attachCachedPens(list) {
   }
 }
 async function fetchPens() {
+  await loadPensSnapshot();
   const targets = events.filter(eventNeedsPens);
   if (!targets.length) return false;
   let changed = false;
   await Promise.all(targets.map(async e => {
     const key = pensKey(e);
     const cached = pensCache.get(e.id);
-    if (cached && cached.key === key && e.state === 'post') {
+    // Finished matches: prefer any cached/snapshot pens (no need to hit summary)
+    if (cached && cached.byTeam && Object.keys(cached.byTeam).length && e.state === 'post') {
       if (e.pens !== cached.byTeam) { e.pens = cached.byTeam; changed = true; }
       return;
     }
     try {
-      const res = await fetch(SUMMARY_API + encodeURIComponent(e.id), { cache: 'no-store' });
-      if (!res.ok) return;
+      const res = await fetch(LIVE_SUMMARY + encodeURIComponent(e.id), { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const json = await res.json();
       const byTeam = {};
       for (const row of (json.shootout || [])) {
@@ -773,7 +805,12 @@ async function fetchPens() {
       pensCache.set(e.id, { key, byTeam });
       e.pens = byTeam;
       if (!prev || prev.key !== key || JSON.stringify(prev.byTeam) !== JSON.stringify(byTeam)) changed = true;
-    } catch (err) { /* keep stale pens if any */ }
+    } catch (err) {
+      // fall back to snapshot/stale cache if live summary is gone
+      if (cached && cached.byTeam) {
+        if (e.pens !== cached.byTeam) { e.pens = cached.byTeam; changed = true; }
+      }
+    }
   }));
   return changed;
 }
@@ -812,9 +849,10 @@ async function fetchData(manual) {
   fetching = true;
   $('refreshIcon').classList.add('spinning');
   try {
-    const res = await fetch(API, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    events = normalize(await res.json());
+    await loadPensSnapshot();
+    const { json, source } = await fetchJsonPreferLive(LIVE_API, SNAP_API);
+    dataSource = source;
+    events = normalize(json);
     attachCachedPens(events);
     lastUpdated = new Date();
     kickoffFetched = false;
@@ -887,9 +925,7 @@ async function fetchStandings() {
   if (fetchingStandings) return;
   fetchingStandings = true;
   try {
-    const res = await fetch(STANDINGS_API, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
+    const { json } = await fetchJsonPreferLive(LIVE_STANDINGS, SNAP_STANDINGS);
     const groups = [];
     for (const child of (json.children || [])) {
       const letter = (child.name || '').replace(/^Group\s+/i, '');
@@ -956,7 +992,8 @@ function scheduleRefresh() {
 
 function updatedLabel() {
   const when = lastUpdated ? 'updated ' + fmtTime.format(lastUpdated) + ' · ' : '';
-  $('updated').textContent = when + MODE_LABEL[refreshMode];
+  const src = dataSource === 'snapshot' ? ' · archived' : '';
+  $('updated').textContent = when + MODE_LABEL[refreshMode] + src;
 }
 
 function setRefreshMode(m) {
